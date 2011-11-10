@@ -262,11 +262,9 @@ module CASServer
       unless config[:disable_auto_migrations]
         ActiveRecord::Base.establish_connection(config[:database])
         print_cli_message "Running migrations to make sure your database schema is up to date..."
-        prev_db_log = ActiveRecord::Base.logger
         ActiveRecord::Base.logger = Logger.new(STDOUT)
         ActiveRecord::Migration.verbose = true
         ActiveRecord::Migrator.migrate(File.dirname(__FILE__) + "/../../db/migrate")
-        ActiveRecord::Base.logger = prev_db_log
         print_cli_message "Your database is now up to date."
       end
 

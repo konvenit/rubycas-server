@@ -148,6 +148,7 @@ module CASServer
       init_database!
       init_logger!
       init_authenticators!
+      init_customizers!
     end
 
     def self.handler_options
@@ -279,11 +280,18 @@ module CASServer
       ActiveRecord::Base.establish_connection(config[:database])
     end
 
+    def self.init_customizers!
+      if config[:customizer_file]
+        require config[:customizer_file]
+      end
+    end
+
     configure do
       load_config_file(CONFIG_FILE)
       init_logger!
       init_database!
       init_authenticators!
+      init_customizers!
     end
 
     before do

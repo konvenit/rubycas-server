@@ -68,8 +68,7 @@ module CASServer::Model
       :foreign_key => :created_by_st_id
 
     def matches_service?(service)
-      CASServer::CAS.clean_service_url(self.service) ==
-        CASServer::CAS.clean_service_url(service)
+      CASServer::CAS.clean_service_url(service) =~ /^#{(CASServer::CAS.clean_service_url(self.service))}/
     end
   end
 

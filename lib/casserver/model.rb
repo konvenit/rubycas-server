@@ -68,7 +68,9 @@ module CASServer::Model
       :foreign_key => :created_by_st_id
 
     def matches_service?(service)
-      CASServer::CAS.clean_service_url(service) =~ /^#{(CASServer::CAS.clean_service_url(self.service))}/
+      clean_left  = CASServer::CAS.clean_service_url(self.service)
+      clean_right = CASServer::CAS.clean_service_url(service)
+      clean_left == clean_right or clean_left == /^#{clean_right}/
     end
   end
 

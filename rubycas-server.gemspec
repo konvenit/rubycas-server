@@ -1,9 +1,9 @@
 $gemspec = Gem::Specification.new do |s|
   s.name     = 'rubycas-server'
-  s.version  = '1.1.1'
+  s.version  = '1.1.2'
   s.authors  = ["Matt Zukowski"]
   s.email    = ["matt@zukowski.ca"]
-  s.homepage = 'https://github.com/rubycas/rubycas-server'
+  s.homepage = 'https://github.com/konvenit/rubycas-server'
   s.platform = Gem::Platform::RUBY
   s.summary  = %q{Provides single sign-on authentication for web applications using the CAS protocol.}
   s.description  = %q{Provides single sign-on authentication for web applications using the CAS protocol.}

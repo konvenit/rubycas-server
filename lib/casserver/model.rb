@@ -67,10 +67,13 @@ module CASServer::Model
     has_one :proxy_granting_ticket,
       :foreign_key => :created_by_st_id
 
+    def clean_service_url(service_url)
+      url = URI.parse(service_url)
+      URI.join(url.protocol, url.host, url.port).to_s
+    end
+
     def matches_service?(service)
-      clean_left  = CASServer::CAS.clean_service_url(self.service)
-      clean_right = CASServer::CAS.clean_service_url(service)
-      clean_left == clean_right or clean_left == /^#{clean_right}/
+      clean_service_url(self.service) == clean_service_url(service)
     end
   end
 

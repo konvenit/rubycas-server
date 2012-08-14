@@ -69,7 +69,7 @@ module CASServer::Model
 
     def clean_service_url(service_url)
       url = URI.parse(service_url)
-      URI.join(url.scheme, url.host, url.port).to_s
+      "#{url.scheme}://#{url.host}:#{url.port}"
     end
 
     def matches_service?(service)

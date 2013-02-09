@@ -1,13 +1,9 @@
-require 'sinatra/base'
-require 'casserver/localization'
 require 'casserver/utils'
 require 'casserver/cas'
-
-require 'logger'
-$LOG ||= Logger.new(STDOUT)
+require 'casserver/base'
 
 module CASServer
-  class Server < Sinatra::Base
+  class Server < CASServer::Base
     if ENV['CONFIG_FILE']
       CONFIG_FILE = ENV['CONFIG_FILE']
     elsif !(c_file = File.dirname(__FILE__) + "/../../config.yml").nil? && File.exist?(c_file)
@@ -17,7 +13,6 @@ module CASServer
     end
 
     include CASServer::CAS # CAS protocol helpers
-    include Localization
 
     # Use :public_folder for Sinatra >= 1.3, and :public for older versions.
     def self.use_public_folder?
@@ -332,6 +327,8 @@ module CASServer
       end
 
       if tgt and !tgt_error
+        @authenticated = true
+        @authenticated_username = tgt.username
         @message = {:type => 'notice',
           :message => t.notice.logged_in_as(tgt.username)}
       elsif tgt_error
@@ -461,6 +458,8 @@ module CASServer
             :request => @env
           )
           if credentials_are_valid
+            @authenticated = true
+            @authenticated_username = @username
             extra_attributes.merge!(auth.extra_attributes) unless auth.extra_attributes.blank?
             successful_authenticator = auth
             break
@@ -550,7 +549,7 @@ module CASServer
           end
 
           pgts = CASServer::Model::ProxyGrantingTicket.find(:all,
-            :conditions => [CASServer::Model::Base.connection.quote_table_name(CASServer::Model::ServiceTicket.table_name)+".username = ?", tgt.username],
+            :conditions => [CASServer::Model::ServiceTicket.quoted_table_name+".username = ?", tgt.username],
             :include => :service_ticket)
           pgts.each do |pgt|
             $LOG.debug("Deleting Proxy-Granting Ticket '#{pgt}' for user '#{pgt.service_ticket.username}'")
@@ -616,55 +615,67 @@ module CASServer
 		# 2.4
 
 		# 2.4.1
-		get "#{uri_path}/validate" do
-			CASServer::Utils::log_controller_action(self.class, params)
+    get "#{uri_path}/validate" do
+      CASServer::Utils::log_controller_action(self.class, params)
 
-			# required
-			@service = clean_service_url(params['service'])
-			@ticket = params['ticket']
-			# optional
-			@renew = params['renew']
+      if ip_allowed?(request.ip)
+        # required
+        @service = clean_service_url(params['service'])
+        @ticket = params['ticket']
+        # optional
+        @renew = params['renew']
 
-			st, @error = validate_service_ticket(@service, @ticket)
-			@success = st && !@error
+        st, @error = validate_service_ticket(@service, @ticket)
+        @success = st && !@error
 
-			@username = st.username if @success
+        @username = st.username if @success
+      else
+        @success = false
+        @error = Error.new(:INVALID_REQUEST, 'The IP address of this service has not been allowed')
+      end
 
       status response_status_from_error(@error) if @error
 
-			render @template_engine, :validate, :layout => false
-		end
-
+      render @template_engine, :validate, :layout => false
+    end
 
     # 2.5
 
     # 2.5.1
     get "#{uri_path}/serviceValidate" do
-			CASServer::Utils::log_controller_action(self.class, params)
+      CASServer::Utils::log_controller_action(self.class, params)
 
-			# required
-			@service = clean_service_url(params['service'])
-			@ticket = params['ticket']
-			# optional
-			@pgt_url = params['pgtUrl']
-			@renew = params['renew']
+      # force xml content type
+      content_type 'text/xml', :charset => 'utf-8'
 
-			st, @error = validate_service_ticket(@service, @ticket)
-			@success = st && !@error
+      if ip_allowed?(request.ip)
+        # required
+        @service = clean_service_url(params['service'])
+        @ticket = params['ticket']
+        # optional
+        @pgt_url = params['pgtUrl']
+        @renew = params['renew']
 
-			if @success
-        @username = st.username
-        if @pgt_url
-          pgt = generate_proxy_granting_ticket(@pgt_url, st)
-          @pgtiou = pgt.iou if pgt
+        st, @error = validate_service_ticket(@service, @ticket)
+        @success = st && !@error
+
+        if @success
+          @username = st.username
+          if @pgt_url
+            pgt = generate_proxy_granting_ticket(@pgt_url, st)
+            @pgtiou = pgt.iou if pgt
+          end
+          @extra_attributes = st.granted_by_tgt.extra_attributes || {}
         end
-        @extra_attributes = st.granted_by_tgt.extra_attributes || {}
+      else
+        @success = false
+        @error = Error.new(:INVALID_REQUEST, 'The IP address of this service has not been allowed')
       end
 
       status response_status_from_error(@error) if @error
 
-			render :builder, :proxy_validate
-		end
+      render :builder, :proxy_validate
+    end
 
 
     # 2.6
@@ -673,32 +684,41 @@ module CASServer
     get "#{uri_path}/proxyValidate" do
       CASServer::Utils::log_controller_action(self.class, params)
 
-      # required
-      @service = clean_service_url(params['service'])
-      @ticket = params['ticket']
-      # optional
-      @pgt_url = params['pgtUrl']
-      @renew = params['renew']
+      # force xml content type
+      content_type 'text/xml', :charset => 'utf-8'
 
-      @proxies = []
+      if ip_allowed?(request.ip)
 
-      t, @error = validate_proxy_ticket(@service, @ticket)
-      @success = t && !@error
+        # required
+        @service = clean_service_url(params['service'])
+        @ticket = params['ticket']
+        # optional
+        @pgt_url = params['pgtUrl']
+        @renew = params['renew']
 
-      @extra_attributes = {}
-      if @success
-        @username = t.username
+        @proxies = []
 
-        if t.kind_of? CASServer::Model::ProxyTicket
-          @proxies << t.granted_by_pgt.service_ticket.service
+        t, @error = validate_proxy_ticket(@service, @ticket)
+        @success = t && !@error
+
+        @extra_attributes = {}
+        if @success
+          @username = t.username
+
+          if t.kind_of? CASServer::Model::ProxyTicket
+            @proxies << t.granted_by_pgt.service_ticket.service
+          end
+
+          if @pgt_url
+            pgt = generate_proxy_granting_ticket(@pgt_url, t)
+            @pgtiou = pgt.iou if pgt
+          end
+
+          @extra_attributes = t.granted_by_tgt.extra_attributes || {}
         end
-
-        if @pgt_url
-          pgt = generate_proxy_granting_ticket(@pgt_url, t)
-          @pgtiou = pgt.iou if pgt
-        end
-
-        @extra_attributes = t.granted_by_tgt.extra_attributes || {}
+      else
+        @success = false
+        @error = Error.new(:INVALID_REQUEST, 'The IP address of this service has not been allowed')
       end
 
       status response_status_from_error(@error) if @error
@@ -759,6 +779,24 @@ module CASServer
     rescue Errno::ENOENT
       raise unless @custom_views
       super engine, data, options, views
+    end
+
+    def ip_allowed?(ip)
+      require 'ipaddr'
+
+      allowed_ips = Array(settings.config[:allowed_service_ips])
+
+      allowed_ips.empty? || allowed_ips.any? { |i| IPAddr.new(i) === ip }
+    end
+
+    helpers do
+      def authenticated?
+        @authenticated
+      end
+
+      def authenticated_username
+        @authenticated_username
+      end
     end
   end
 end

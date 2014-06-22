@@ -325,9 +325,9 @@ module CASServer::CAS
   end
   module_function :clean_service_url
 
-  def self.additional_service_cleaner(value=nil)
-    if value
-      @additional_service_cleaner = value
+  def self.additional_service_cleaner(&block)
+    if block_given?
+      @additional_service_cleaner = &block
     else
       @additional_service_cleaner
     end

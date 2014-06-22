@@ -317,8 +317,20 @@ module CASServer::CAS
     $LOG.debug("Cleaned dirty service URL #{dirty_service.inspect} to #{clean_service.inspect}") if
       dirty_service != clean_service
 
-    return clean_service
+    if CASServer::CAS.additional_service_cleaner
+      return CASServer::CAS.additional_service_cleaner.call(clean_service)
+    else
+      return clean_service
+    end
   end
   module_function :clean_service_url
+
+  def self.additional_service_cleaner(value=nil)
+    if value
+      @additional_service_cleaner = value
+    else
+      @additional_service_cleaner
+    end
+  end
 
 end

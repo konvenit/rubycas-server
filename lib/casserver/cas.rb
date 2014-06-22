@@ -327,7 +327,7 @@ module CASServer::CAS
 
   def self.additional_service_cleaner(&block)
     if block_given?
-      @additional_service_cleaner = &block
+      @additional_service_cleaner = block
     else
       @additional_service_cleaner
     end

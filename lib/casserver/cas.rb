@@ -171,7 +171,10 @@ module CASServer::CAS
       error = Error.new(:INVALID_REQUEST, "Ticket or service parameter was missing in the request.")
       $LOG.warn "#{error.code} - #{error.message}"
     elsif st = ServiceTicket.find_by_ticket(ticket)
-      if st.kind_of?(CASServer::Model::ProxyTicket) && !allow_proxy_tickets
+      if st.consumed?
+        error = Error.new(:INVALID_TICKET, "Ticket '#{ticket}' has already been used up.")
+        $LOG.warn "#{error.code} - #{error.message}"
+      elsif st.kind_of?(CASServer::Model::ProxyTicket) && !allow_proxy_tickets
         error = Error.new(:INVALID_TICKET, "Ticket '#{ticket}' is a proxy ticket, but only service tickets are allowed here.")
         $LOG.warn "#{error.code} - #{error.message}"
       elsif Time.now - st.created_on > settings.config[:maximum_unused_service_ticket_lifetime]
